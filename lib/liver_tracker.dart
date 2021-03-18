@@ -1,9 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:math' show cos, sqrt, asin;
+
+import 'package:permission_handler/permission_handler.dart';
 
 class LiveTracker extends StatefulWidget {
   @override
@@ -12,7 +13,7 @@ class LiveTracker extends StatefulWidget {
 
 class _LiveTrackerState extends State<LiveTracker> {
   GoogleMapController mapController;
-  CameraPosition cameraPosition = CameraPosition(target: LatLng(0.0,0.0));
+  CameraPosition cameraPosition = CameraPosition(target: LatLng(0.0, 0.0));
   Position currentPosition;
   Position startCoordinates;
   Position lastCoordinates;
@@ -24,24 +25,31 @@ class _LiveTrackerState extends State<LiveTracker> {
   Map<PolylineId, Polyline> polylines = {};
   Geolocator geolocator = Geolocator();
   double totalDistance = 0;
+  var startLat;
+  var startLong;
 
-  List checking = [0.003, 0.0939];
+  List checking = [0.0300, 0.09390];
   @override
-  void initState(){
+  void initState() {
     super.initState();
+    enableLocation();
     getCurrentLocation();
     getStreamedLocationChanges();
     // getStreamedLocationChanges()
-    setState(() {
-      
-    });
+    setState(() {});
   }
 
-  getCurrentLocation() async{
- 
-    await geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.best
-    ).then((Position position) {
+  enableLocation() async {
+    if (!await Permission.location.isGranted) {
+      await Permission.location.request();
+    }
+  }
+
+  getCurrentLocation() async {
+// Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
+
+    await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.best)
+        .then((Position position) {
       setState(() {
         currentPosition = position;
         startCoordinates = position;
@@ -49,140 +57,138 @@ class _LiveTrackerState extends State<LiveTracker> {
         // checking.add(num.parse(position.longitude.toStringAsFixed(4)));
         // polylineCoordinates.add(LatLng(position.latitude, position.longitude));
         print(polylineCoordinates);
+        if (startLat == null && startLong == null) {
+          startLat = position.latitude;
+          startLong = position.longitude;
+        }
         // print("Lat: ${position.latitude}, Lng : ${position.longitude}");
       });
 
       mapController.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: LatLng(position.latitude, position.longitude),
+        CameraUpdate.newCameraPosition(CameraPosition(
+          target: LatLng(position.latitude, position.longitude),
           zoom: 18,
-          )
-        ),
+        )),
       );
 
       // add marker for the starting position of the runner
       Marker startMarker = Marker(
-      markerId:MarkerId("$currentPosition"),
-      position: LatLng( currentPosition.latitude,
-          currentPosition.longitude
-      ),
-      infoWindow: InfoWindow(
-        title: "Start",
-      ),
-      icon: BitmapDescriptor.defaultMarker
-    );
-    markers.add(startMarker);
-    }).catchError((onError){
-      print("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkuuuuuuuuuuuuuuuuuuuuukk   \n$onError");
+          markerId: MarkerId("$currentPosition"),
+          position: LatLng(currentPosition.latitude, currentPosition.longitude),
+          infoWindow: InfoWindow(
+            title: "Start",
+          ),
+          icon: BitmapDescriptor.defaultMarker);
+      markers.add(startMarker);
+    }).catchError((onError) {
+      print(
+          "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkuuuuuuuuuuuuuuuuuuuuukk   \n$onError");
     });
   }
 
-  getStreamedLocationChanges(){
+  getStreamedLocationChanges() {
+// StreamSubscription<Position> positionStream = Geolocator.getPositionStream(locationOptions).listen(
+//     (Position position) {
+//         print(position == null ? 'Unknown' : position.latitude.toString() + ', ' + position.longitude.toString());
+//     });
 
-    geolocator.getPositionStream(
-      LocationOptions(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-        // timeInterval: 5000
-        
-      )
-    ).listen((Position position){
+    Geolocator.getPositionStream(
+            desiredAccuracy: LocationAccuracy.high,
+            timeInterval: 1000,
+            intervalDuration: Duration(milliseconds: 1000)
+
+            // timeInterval: 5000
+            )
+        .listen((Position position) {
       setState(() {
         lastCoordinates = position;
         print("${position.longitude} ooooo");
-        print("${checking[checking.length-1]}");
-        print(" ${position.longitude} ==  ${checking[checking.length-1]}  $checking");
-        if(num.parse(position.latitude.toStringAsFixed(3)) == checking[checking.length-2] && num.parse(position.longitude.toStringAsFixed(4))==checking[checking.length-1]){
+        print("${checking[checking.length - 1]}");
+        print(
+            " ${position.longitude} ==  ${checking[checking.length - 1]}  $checking  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        if (num.parse(position.latitude.toStringAsFixed(4)) ==
+                checking[checking.length - 2] &&
+            num.parse(position.longitude.toStringAsFixed(4)) ==
+                checking[checking.length - 1]) {
           print(position.longitude);
 
-            print(polylineCoordinates);
-          
-        } else{
-            print(polylineCoordinates);
-        
+          print(polylineCoordinates);
+        } else {
+          print(polylineCoordinates);
 
-            polylineCoordinates.add(
+          polylineCoordinates.add(
             LatLng(position.latitude, position.longitude),
           );
           print("checking adding to the list");
-          checking.add(num.parse(position.latitude.toStringAsFixed(3)));
+          checking.add(num.parse(position.latitude.toStringAsFixed(4)));
           checking.add(num.parse(position.longitude.toStringAsFixed(4)));
           print(checking);
         }
-        // if(position.latitude != checking[checking.length-2] || position.longitude!=checking[checking.length-1]){
-        //   polylineCoordinates.add(
-        //     LatLng(num.parse(position.latitude.toStringAsFixed(3)), num.parse(position.longitude.toStringAsFixed(4))),
-        //   );
-        // }
-            
-        
+        if (position.latitude != checking[checking.length - 2] ||
+            position.longitude != checking[checking.length - 1]) {
+          polylineCoordinates.add(
+            LatLng(num.parse(position.latitude.toStringAsFixed(3)),
+                num.parse(position.longitude.toStringAsFixed(4))),
+          );
+        }
 
-          // print(LatLng(position.latitude, position.longitude) == polylineCoordinates[polylineCoordinates.length-1]);
-          print("object");
-          print(position.longitude.toStringAsFixed(4));
-          print(num.parse(position.longitude.toStringAsFixed(4)));
-
+        // print(LatLng(position.latitude, position.longitude) == polylineCoordinates[polylineCoordinates.length-1]);
+        print("object");
+        print(position.longitude.toStringAsFixed(4));
+        print(num.parse(position.longitude.toStringAsFixed(4)));
       });
       // n = num.parse(n.toStringAsFixed(2));
-        print(polylineCoordinates);
-        print("33333333333333333333333333333");
-
+      print(polylineCoordinates);
+      print("33333333333333333333333333333");
+      addMarkerToMap(polylineCoordinates);
     });
-    addMarkerToMap(polylineCoordinates);
     createPolyLine();
     print(" after the stream");
   }
 
+  addMarkerToMap(List<LatLng> streamedData) {
+    // var lastIndex = markers.last;
+    if (markers.isNotEmpty) {
+      var firstElement = markers.first;
+      markers.retainWhere((element) => element == firstElement);
+    }
 
-  addMarkerToMap(List<LatLng> streamedData){
-    
-    var polyLength = streamedData.length-1;
-    if(streamedData.length > 1){
+    var polyLength = streamedData.length - 1;
+    if (streamedData.length > 1) {
       Marker movingMarker = Marker(
-        markerId : MarkerId("${streamedData[polyLength]}"),
-        position: LatLng( streamedData[polyLength].latitude, 
-                          streamedData[polyLength].longitude),
-        infoWindow: InfoWindow(
-          title: "Your Present Location",
-        ),
-        icon: BitmapDescriptor.defaultMarker
-      );
+          markerId: MarkerId("${streamedData[polyLength]}"),
+          position: LatLng(streamedData[polyLength].latitude,
+              streamedData[polyLength].longitude),
+          infoWindow: InfoWindow(
+            title: "Your Present Location",
+          ),
+          icon: BitmapDescriptor.defaultMarker);
       // add marker for the current position of the runner;
       markers.add(movingMarker);
-      if(startCoordinates.latitude < streamedData[polyLength].latitude){
+      if (startCoordinates.latitude < streamedData[polyLength].latitude) {
         southwestCoordinates = startCoordinates;
         northeastCoordinates = lastCoordinates;
-      } else{
+      } else {
         southwestCoordinates = lastCoordinates;
         northeastCoordinates = startCoordinates;
       }
-      mapController.animateCamera(
-          CameraUpdate.newLatLngBounds(
-            LatLngBounds(
-              northeast: LatLng(northeastCoordinates.latitude,
-                      northeastCoordinates.longitude), 
-              southwest: LatLng(southwestCoordinates.latitude, 
-              southwestCoordinates.longitude),
-                       )
-             , 100)
-        );
-
-      
-
-      for(int i = 0; i < polylineCoordinates.length - 1; i++ ){
-
+      // mapController.animateCamera(CameraUpdate.newLatLngBounds(
+      //     LatLngBounds(
+      //       northeast: LatLng(
+      //           northeastCoordinates.latitude, northeastCoordinates.longitude),
+      //       southwest: LatLng(
+      //           southwestCoordinates.latitude, southwestCoordinates.longitude),
+      //     ),
+      //     100));
+      totalDistance = 0;
+      for (int i = 0; i < polylineCoordinates.length - 1; i++) {
         totalDistance += _coordinateDistance(
-          polylineCoordinates[i].latitude,
-          polylineCoordinates[i].longitude,
-          polylineCoordinates[i + 1].latitude,
-          polylineCoordinates[i+ 1].longitude
-         );
-         setState(() {
-           totalDistance.toString();
-         });
+            polylineCoordinates[i].latitude,
+            polylineCoordinates[i].longitude,
+            polylineCoordinates[i + 1].latitude,
+            polylineCoordinates[i + 1].longitude);
       }
-
-    
+      setState(() {});
     }
   }
 
@@ -195,17 +201,15 @@ class _LiveTrackerState extends State<LiveTracker> {
     return 12742 * asin(sqrt(a));
   }
 
-
-   createPolyLine(){
-     PolylineId id = PolylineId("poly");
+  createPolyLine() {
+    PolylineId id = PolylineId("poly");
     Polyline polyline = Polyline(
         polylineId: id,
         color: Colors.red,
         points: polylineCoordinates,
-        width: 3
-    );
+        width: 3);
     polylines[id] = polyline;
-   }
+  }
 
 //   var geolocator = Geolocator();
 // var locationOptions = LocationOptions(accuracy: LocationAccuracy.high, distanceFilter: 10);
@@ -215,57 +219,49 @@ class _LiveTrackerState extends State<LiveTracker> {
 //         print(position == null ? 'Unknown' : position.latitude.toString() + ', ' + position.longitude.toString());
 //     });
 
-  
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children:[
-
-          GoogleMap(
-            initialCameraPosition: cameraPosition,
-            mapType:MapType.normal,
-            onMapCreated: (GoogleMapController controller){
-              mapController = controller;
-            },
-            zoomGesturesEnabled: true,
-            zoomControlsEnabled: true,
-            markers: markers != null ? Set<Marker>.from(markers) : null,
-
-            polylines: Set<Polyline>.of(polylines.values),
-            ),
-          // markers: markers != null ? Set<Marker>.from(markers) : null,
-          Align(
-            alignment:Alignment.bottomLeft,
-            child: Container(
-              width: MediaQuery.of(context).size.width * .8,
-              color: Colors.white,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  // mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Text("$totalDistance /KM", style: TextStyle(
-                      color: Colors.orange,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold
-                    )),
-
-                    Text("${lastCoordinates!= null? lastCoordinates.speedAccuracy : "0"} /ms",
+      body: Stack(children: [
+        GoogleMap(
+          initialCameraPosition: cameraPosition,
+          mapType: MapType.normal,
+          onMapCreated: (GoogleMapController controller) {
+            mapController = controller;
+          },
+          zoomGesturesEnabled: true,
+          zoomControlsEnabled: true,
+          markers: markers != null ? Set<Marker>.from(markers) : null,
+          polylines: Set<Polyline>.of(polylines.values),
+        ),
+        // markers: markers != null ? Set<Marker>.from(markers) : null,
+        Align(
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            width: MediaQuery.of(context).size.width * .8,
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                // mainAxisSize: MainAxisSize.max,
+                children: [
+                  Text("${totalDistance.toStringAsFixed(2)} /KM",
                       style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold
-                      )
-                    )
-
-                  ],
-                ),
+                          color: Colors.orange,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold)),
+                  Text(
+                      "${lastCoordinates != null ? lastCoordinates.speedAccuracy : "0"} /ms",
+                      style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold))
+                ],
               ),
             ),
-          )
-        ]
-      ),
+          ),
+        )
+      ]),
     );
   }
 }
